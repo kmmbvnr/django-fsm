@@ -1,6 +1,23 @@
 Changelog
 =========
 
+django-fsm 5.0.2 2026-11-13
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+- Fix ``chart()`` for states that are plain ``Enum`` members: the edges were
+  named with ``str(member)`` while the vertices used the member value, so no
+  edge was attached to a vertex.
+- Fix ``chart()`` missing edges between the targets of several
+  ``State.ANY`` transitions: only the transitions processed later got an edge
+  from the targets of the earlier ones.
+- ``chart()`` no longer produces invalid DOT for state names and transition
+  labels that contain a double quote. Graphviz and the vis-network parser
+  disagree on how a quote is escaped, so it is replaced with a typographic one.
+- Fix ``State.get()`` ignoring a falsy default (``0``, ``False``, ``""``): a
+  state getter returning ``None`` now reads as that default.
+- Strip the extra blank line at the end of ``base.py`` and ``signals.py``.
+
+
 django-fsm 5.0.1 2026-10-27
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

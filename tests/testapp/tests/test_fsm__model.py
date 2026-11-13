@@ -61,7 +61,44 @@ class IntStageReview(object):
         pass
 
 
+class ZeroDefaultReview(object):
+    # A falsy default: an unset (None) column must read as the default 0.
+    stage = fsm.State(int, default=0)
+
+    def __init__(self, report):
+        self.report = report
+
+    @stage.setter()
+    def _set_stage(self, value):
+        self.report.stage = value
+
+    @stage.getter()
+    def _get_stage(self):
+        return self.report.stage
+
+    @stage.transition(source=0, target=1)
+    def advance(self):
+        pass
+
+
 class Test(TestCase):
+    def test_falsy_default_is_used_for_an_unset_state(self):
+        # State.get() tested `if self._default:`, so a falsy default (0) was
+        # never applied and an unset column read as None, which no transition
+        # can start from.
+        report = IntStageReport(stage=None)
+        review = ZeroDefaultReview(report)
+        self.assertEqual(review.stage, 0)
+
+        review.advance()
+
+        self.assertEqual(review.stage, 1)
+        self.assertEqual(report.stage, 1)
+
+    def test_falsy_default_does_not_override_a_set_state(self):
+        self.assertEqual(ZeroDefaultReview(IntStageReport(stage=1)).stage, 1)
+        self.assertEqual(ZeroDefaultReview(IntStageReport(stage=0)).stage, 0)
+
     def test_default_state_of_new_object(self):
         report = Report(text="test")
         review = ReportReview(report)

@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parent
 
 setuptools.setup(
     name="django-fsm",
-    version="5.0.1",
+    version="5.0.2",
     description="State machines for Python objects and Django models.",
     long_description=(ROOT / "README.rst").read_text(encoding="utf-8"),
     long_description_content_type="text/x-rst",

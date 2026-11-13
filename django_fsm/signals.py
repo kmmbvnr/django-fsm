@@ -8,4 +8,3 @@ try:
 except ImportError:
     pre_transition = None  # type: ignore[assignment]
     post_transition = None  # type: ignore[assignment]
-

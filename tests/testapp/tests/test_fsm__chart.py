@@ -1,7 +1,12 @@
+import re
 from enum import Enum
 from unittest import TestCase
+
+from django.db import models
+
 import django_fsm as fsm
 from django_fsm import State
+from django_fsm.chart import dot_text
 
 
 class TestFlow:
@@ -111,3 +116,136 @@ class TestEnumChart(TestCase):
         self.assertIn('label="Publish"', output)
         self.assertIn('label="Republish"', output)
         self.assertIn("removed", output)
+
+
+def parse_dot(output):
+    """Split chart() output into declared vertex ids and edge endpoints.
+
+    Every body line must be a well-formed vertex or edge statement, so a stray
+    quote inside a name or label fails the parse.
+    """
+    vertex_line = re.compile(r'^"([^"]*)" \[label="([^"]*)"\];$')
+    edge_line = re.compile(r'^"([^"]*)" -> "([^"]*)" \[label="([^"]*)"\];$')
+    vertices, edges = {}, []
+    lines = output.strip().splitlines()
+    assert lines[0] == "digraph {" and lines[-1] == "}", output
+    for line in lines[1:-1]:
+        if not line:
+            continue
+        match = vertex_line.match(line)
+        if match:
+            vertices[match.group(1)] = match.group(2)
+            continue
+        match = edge_line.match(line)
+        assert match, f"malformed DOT line: {line!r}"
+        edges.append(match.groups())
+    return vertices, edges
+
+
+class TestEnumEdges(TestCase):
+    def test_edges_connect_the_declared_vertices(self):
+        # Vertices were named by the Enum member's value ("new"), while the
+        # edges used str(member) ("Stage.NEW"), so no edge touched a vertex
+        # and the diagram was drawn with disconnected nodes.
+        vertices, edges = parse_dot(fsm.chart(EnumFlow.state))
+
+        self.assertIn(("new", "published", "Publish"), edges)
+        self.assertIn(("new", "removed", "Remove"), edges)
+        for source, target, _ in edges:
+            self.assertIn(source, vertices)
+            self.assertIn(target, vertices)
+
+    def test_text_choices_edges_are_unchanged(self):
+        class Status(models.TextChoices):
+            NEW = "new", "New"
+            DONE = "done", "Done"
+
+        class ChoicesFlow:
+            state = fsm.State(Status, default=Status.NEW)
+
+            @state.transition(source=Status.NEW, target=Status.DONE)
+            def finish(self):
+                pass
+
+        vertices, edges = parse_dot(fsm.chart(ChoicesFlow.state))
+
+        self.assertEqual(vertices, {"done": "Done", "new": "New"})
+        self.assertEqual(edges, [("new", "done", "Finish")])
+
+
+class AnyFlow:
+    state = fsm.State(states=["new", "mid", "x", "y"], default="new")
+
+    @state.transition(source="new", target="mid")
+    def go(self):
+        pass
+
+    @state.transition(source=State.ANY, target="x", label="To X")
+    def to_x(self):
+        pass
+
+    @state.transition(source=State.ANY, target="y", label="To Y")
+    def to_y(self):
+        pass
+
+
+class ReversedAnyFlow:
+    # The same transitions, but the method names list "y" before "x": state
+    # transitions are enumerated by method name, not by declaration order.
+    state = fsm.State(states=["new", "mid", "x", "y"], default="new")
+
+    @state.transition(source="new", target="mid")
+    def go(self):
+        pass
+
+    @state.transition(source=State.ANY, target="y", label="To Y")
+    def a_to_y(self):
+        pass
+
+    @state.transition(source=State.ANY, target="x", label="To X")
+    def b_to_x(self):
+        pass
+
+
+class TestAnySource(TestCase):
+    def test_any_transitions_reach_each_other(self):
+        # Edges of a State.ANY transition were built from the vertices known
+        # at that moment, so a target of the next ANY transition was missed:
+        # "x -> y" was drawn but "y -> x" was not.
+        _, edges = parse_dot(fsm.chart(AnyFlow.state))
+
+        self.assertIn(("x", "y", "To Y"), edges)
+        self.assertIn(("y", "x", "To X"), edges)
+        for vertex in ("new", "mid"):
+            self.assertIn((vertex, "x", "To X"), edges)
+            self.assertIn((vertex, "y", "To Y"), edges)
+        self.assertNotIn(("x", "x", "To X"), edges)
+
+    def test_chart_does_not_depend_on_the_order_of_transitions(self):
+        self.assertEqual(fsm.chart(AnyFlow.state), fsm.chart(ReversedAnyFlow.state))
+
+
+class QuotedFlow:
+    state = fsm.State(states=["new", 'say "ok"'], default="new")
+
+    @state.transition(source="new", target='say "ok"', label='Say "hi"')
+    def speak(self):
+        pass
+
+
+class TestQuotes(TestCase):
+    def test_double_quotes_keep_the_graph_well_formed(self):
+        # `[label="Say "hi""]` is not valid DOT. No escape works for every
+        # consumer (Graphviz wants \", the vis-network parser reads the
+        # backslash literally and ends the string), so quotes are replaced
+        # with typographic ones.
+        vertices, edges = parse_dot(fsm.chart(QuotedFlow.state))
+
+        self.assertEqual(edges, [("new", "say “ok”", "Say “hi”")])
+        self.assertIn("say “ok”", vertices)
+        self.assertIn("new", vertices)
+
+    def test_text_without_quotes_is_untouched(self):
+        self.assertEqual(dot_text("Re-publish: A/B (x)"), "Re-publish: A/B (x)")
+        self.assertEqual(dot_text('a"b'), "a”b")
+        self.assertEqual(dot_text('"a" and ("b")'), "“a” and (“b”)")

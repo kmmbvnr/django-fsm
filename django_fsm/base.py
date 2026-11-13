@@ -559,7 +559,7 @@ class State:
         """Get the state from the underline class instance."""
         if self._getter:
             value = self._getter(instance)
-            if self._default:
+            if self._default is not None:
                 return self._default if value is None or value == "" else value
             else:
                 return value
@@ -731,4 +731,3 @@ def can_proceed(
 def has_transition_perm(bound_method: TransitionBoundMethod, user: Any) -> bool:
     """Check the source state, conditions and the user's permission."""
     return bound_method.can_proceed() and bound_method.has_perm(user)
-

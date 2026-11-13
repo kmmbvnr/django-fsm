@@ -54,9 +54,12 @@ class StandaloneFSMTest(unittest.TestCase):
 
     def test_chart_generation(self):
         dot = fsm.chart(Review.state)
-        self.assertIn("DRAFT", dot)
-        self.assertIn("PUBLISHED", dot)
-        self.assertIn("ARCHIVED", dot)
+        # vertices and the edges between them use the same Enum value names
+        for name in ("draft", "published", "archived"):
+            self.assertIn(f'"{name}" [label="{name}"];', dot)
+        self.assertIn('"draft" -> "published" [label="Publish"];', dot)
+        self.assertIn('"published" -> "archived" [label="Archive"];', dot)
+        self.assertNotIn("ReviewState", dot)
 
 
 if __name__ == "__main__":

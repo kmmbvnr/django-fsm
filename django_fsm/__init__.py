@@ -62,7 +62,7 @@ if _DJANGO_AVAILABLE:
     )
 
 
-__version__ = "5.0.1"
+__version__ = "5.0.2"
 
 _DJANGO_ATTRIBUTES = {
     "ConcurrentTransition",
