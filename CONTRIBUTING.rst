@@ -9,6 +9,14 @@ Running Tests
     python -m pip install -e '.[test]'
     python tests/manage.py test testapp django_fsm.tests
 
+The pure-Python API has to work without Django. That is checked in an
+environment without it:
+
+.. code-block:: console
+
+    python -m pip install .
+    python tests/test_standalone.py
+
 To test across multiple Python and Django versions using ``tox``:
 
 .. code-block:: console
